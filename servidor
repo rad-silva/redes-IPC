@@ -8,6 +8,7 @@ users_list = {}
 # Armazena os nomes dos canais existentes e a lista de usuários pertecente a um canal
 channels_list = {}
 
+ 
 
 def validar_nome(nome):
     return re.match(br'^[a-zA-Z][a-zA-Z0-9_-]*$', nome) is not None
@@ -179,7 +180,7 @@ def dados_recebidos(conexao, dados):
         return sair(conexao)
     
     print(conexao, dados)
-    
+
     # se existe pelo menos um delimitador de fim de linha nos dados recebidos
     if b'\r\n' in dados:
         # e se existe um dado incompleto guardado
@@ -217,6 +218,12 @@ def dados_recebidos(conexao, dados):
 
 def conexao_aceita(conexao):
     print(conexao, 'nova conexão')
+    
+    # Cria atributos pra armzenar o nick do usário que se conectou
+    # e para auxiliar nos fragmentos de mensagens recebidas
+    conexao.nick_atual = b'*'
+    conexao.dados_residuais = ''
+
     conexao.registrar_recebedor(dados_recebidos)
 
 
