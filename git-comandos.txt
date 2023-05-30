@@ -1,6 +1,10 @@
 Clonar repositório Git:
 git clone <URL>
 
+Pra se registrar e poder associar sua conta aos commits
+git config --global user.email "you@example.com"
+git config --global user.name "Your Name"
+
 Adicionar para adicionar todos os arquivos alterados para ser preparado pro commit:
 git add . 
 
