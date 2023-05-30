@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 import asyncio
-from tcp import Servidor
+from grader.tcp import Servidor
 import re
+
+# Armazena os nick_names dos usuários registrados e a conexão de cada um
+users_list = {}
+# Armazena os nomes dos canais existentes e a lista de usuários pertecente a um canal
+channels_list = {}
 
 
 def validar_nome(nome):
@@ -9,15 +14,206 @@ def validar_nome(nome):
 
 
 def sair(conexao):
+    notify_members = []
+
+    # Percorre todos os canais contidos na lista de canais
+    for channel_name in channels_list:
+        # pega a lista de membros do canal
+        canal = channels_list[channel_name]
+
+        # verifica se o usuário que está fechando a conexão aprticipa desse canal
+        if conexao.nick_atual.lower() in canal:
+            # remove o membro da lista de membros do canal
+            channels_list[channel_name].remove(conexao.nick_atual.lower()) 
+
+            # adiciona cada membro do canal na lista de membros a serem notificados
+            for user in canal:
+                if user not in notify_members:
+                    notify_members.append(user)
+    
+    # Avisa todos os membros que o usuario fechou a conexao
+    for user in notify_members:
+        users_list[user].enviar(b':%s QUIT :Connection closed\r\n' % conexao.nick_atual)
+
+    # remove o membro da lista de membros registrados no servidor
+    users_list.pop(conexao.nick_atual.lower())
+
+    # fecha a conexao
     print(conexao, 'conexão fechada')
     conexao.fechar()
 
 
+def PING_action(conexao, dados):
+    conexao.enviar(b':server PONG server :' + dados + b'\r\n')
+
+
+def NICK_action(conexao, dados):
+    nick_novo = dados
+
+    if validar_nome(nick_novo) == True:
+        # se o nick escolhido já estiver em uso exibe mensagem de erro
+        if nick_novo.lower() in users_list:
+            conexao.enviar(b':server 433 %s %s :Nickname is already in use\r\n' % (conexao.nick_atual, nick_novo))
+        else:
+            # se o usuario estiver tentando realizar o primeiro registro
+            # adiciona o usuario na lista de usuarios e envia mensagens de sucesso
+            if conexao.nick_atual == b'*':
+                users_list[nick_novo.lower()] = conexao
+                conexao.nick_atual = nick_novo
+
+                conexao.enviar(b':server 001 %s :Welcome\r\n' % nick_novo)
+                conexao.enviar(b':server 422 %s :MOTD File is missing\r\n' % nick_novo)
+
+            # se o usuario já estiver registrado, tenta atualizar nick
+            elif nick_novo.lower() != conexao.nick_atual.lower():
+                users_list.pop(conexao.nick_atual.lower()) # remove o nick antigo
+                users_list[nick_novo.lower()] = conexao # adiciona o nick atual
+
+                conexao.enviar(b':%s NICK %s\r\n' % (conexao.nick_atual, nick_novo))
+                conexao.nick_atual = nick_novo
+    else:
+        # nick invalido
+        conexao.enviar(b':server 432 * %s :Erroneous nickname\r\n' % nick_novo)
+        
+
+def PRIVMSG_users_action(conexao, dados):
+    destinatario, conteudo = dados.split(b' ', 1)
+
+    # envia mensagem na conexão do destinatário
+    if destinatario.lower() in users_list:
+        users_list[destinatario.lower()].enviar(b':%s PRIVMSG %s %s\r\n' % (conexao.nick_atual, destinatario, conteudo))
+        # users_list[destinatario.lower()] ===  conexao_destinatario
+
+
+def PRIVMSG_group_action(conexao, dados):
+    channel_name, conteudo = dados.split(b' ', 1)
+
+    # Verifica se o cannal especificado existe
+    # Se sim, percorre a lista de todos membros do canal e envia
+    # a mensagem na conexão de cada membro execto na do remetente
+    if channel_name.lower() in channels_list:
+        for user in channels_list[channel_name.lower()]:
+            if user != conexao.nick_atual:
+                users_list[user].enviar(b':%s PRIVMSG %s %s\r\n' % (conexao.nick_atual, channel_name, conteudo))
+
+
+def JOIN_action(conexao, dados):
+    nome_canal = dados
+
+    if nome_canal.startswith(b'#'):
+        # Cria um canal caso não exista
+        if nome_canal.lower() not in channels_list:
+            channels_list[nome_canal.lower()] = [conexao.nick_atual]
+        
+        # Adiciona o usuario na lista de usuarios do canal
+        else:
+            channels_list[nome_canal.lower()].append(conexao.nick_atual.lower())
+
+        # Percorre a lista de membros do canal e envia
+        # na conexao de cada membro a mensagem de que um usuário entrou no canal
+        for user in channels_list[nome_canal.lower()]:
+            con = users_list[user]
+            con.enviar(b':%s JOIN :%s\r\n' % (conexao.nick_atual, nome_canal))
+
+        
+        # Obtém e ordena a lista de membros do canal
+        list_members = sorted(channels_list[nome_canal.lower()])
+
+        # Cria uma string com o nome de todos os membros do canal
+        members = b''
+
+        for user in list_members:
+            members += user + b' '
+
+        members.rstrip()
+
+        # Envia para o novo membro do canal a lista de membros atuais do canal
+        conexao.enviar(b':server 353 %s = %s :%s\r\n' % (conexao.nick_atual, nome_canal, members))
+        conexao.enviar(b':server 366 %s %s :End of /NAMES list.\r\n' % (conexao.nick_atual, nome_canal))
+
+    else:
+        # O nome informado não é de um canal
+        conexao.enviar(b':server 403 %s :No such channel\r\n' % nome_canal)
+
+
+def PART_action(conexao, dados):
+    channel_name = dados.split(b' ', 1)[0]
+
+    # Verifica se o cannal especificado existe e o usuário participa dele,
+    # Percorre a lista de membros do canal enviando na conexão de cada membro
+    # (incluindo o usuário que acabou de sair) o aviso que um usuário sail do canal,
+    # Remove o usuario da lista de membros do canal 
+    if channel_name.lower() in channels_list and conexao.nick_atual.lower() in channels_list[channel_name.lower()]:
+        for user in channels_list[channel_name.lower()]:
+            users_list[user.lower()].enviar(b':%s PART %s\r\n' % (conexao.nick_atual, channel_name))
+        
+        channels_list[channel_name.lower()].remove(conexao.nick_atual.lower())
+    
+
+def set_action(conexao, dados):
+    comando, dados = dados.split(b' ', 1)
+
+    if comando == b'PING':
+        PING_action(conexao, dados)
+
+    elif comando == b'NICK':
+        NICK_action(conexao, dados)
+
+    elif comando == b'PRIVMSG':
+        if dados.startswith(b'#'):
+            PRIVMSG_group_action(conexao, dados)
+        else:
+            PRIVMSG_users_action(conexao, dados)
+
+    elif comando == b'JOIN':
+        JOIN_action(conexao, dados)
+
+    elif comando == b'PART':
+        if dados.startswith(b'#'):
+            PART_action(conexao, dados)
+            
+            
+
 def dados_recebidos(conexao, dados):
     if dados == b'':
         return sair(conexao)
+    
     print(conexao, dados)
+    
+    # se existe pelo menos um delimitador de fim de linha nos dados recebidos
+    if b'\r\n' in dados:
+        # e se existe um dado incompleto guardado
+        if conexao.dados_residuais != '':
+            dados = dados.split(b'\r\n', 1) # fatia os dados pela primeira aparição do delimitador
+            conexao.dados_residuais += dados[0] # completa o dado residual
 
+            set_action(conexao, conexao.dados_residuais)
+            
+            # limpa o buffer de dados residuais e mantém o restante dos dados
+            conexao.dados_residuais = ''
+            dados = dados[1]
+
+        dados = dados.split(b'\r\n')
+
+        if len(dados) > 1:
+            # envia todos os dados completos recebidos
+            for i in range(len(dados) - 1):
+                set_action(conexao, dados[i])
+        
+        # se os dados recebidos termina com uma parte incompleta
+        if dados[-1] != '':
+            conexao.dados_residuais = dados[-1]
+
+    else:
+        # se o dado recebido não tiver nenhum delimitador de fim de linha, guarda como dado residual
+        conexao.dados_residuais += dados
+
+        # se o dado residual completou uma linha completa, envia o dado
+        if conexao.dados_residuais.endswith(b'\r\n'):
+            set_action(conexao, conexao.dados_residuais)
+            conexao.dados_residuais = '' # limpa o buffer de dados residuais
+        
+    
 
 def conexao_aceita(conexao):
     print(conexao, 'nova conexão')

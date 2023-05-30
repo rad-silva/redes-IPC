@@ -1,0 +1,15 @@
+Clonar repositório Git:
+git clone <URL>
+
+Adicionar para adicionar todos os arquivos alterados para ser preparado pro commit:
+git add . 
+
+Confirmar as alterações realizadas:
+git commit -m "Mensagem do commit"
+
+Enviar as alterações confirmadas (commits) pro repositório remoto.
+<branch> é o nome do ramo em que você deseja enviar as alterações (no nosso caso é a main).
+git push origin <branch>
+
+Carregar as alterações mais recentes do repositório pro seu ambiente local:
+git pull origin <branch>
