@@ -121,15 +121,21 @@ def JOIN_action(conexao, dados):
         list_members = sorted(channels_list[nome_canal.lower()])
 
         # Cria uma string com o nome de todos os membros do canal
-        members = b''
+        members = b':server 353 %s = %s :' % (conexao.nick_atual, nome_canal)
 
         for user in list_members:
             members += user + b' '
 
-        members.rstrip()
+        members.rstrip() # remove o espaço no fim da string
 
-        # Envia para o novo membro do canal a lista de membros atuais do canal
-        conexao.enviar(b':server 353 %s = %s :%s\r\n' % (conexao.nick_atual, nome_canal, members))
+        # Particiona a mensagem com a lista de membros em sub-mensagens de no máximo 512 caracteres
+        partition_members = [members[i:i+512-4] + b'\r\n' for i in range(0, len(members), 512 - 4)]
+        
+        # Envia as partes da mensagem pro usuário
+        for i in partition_members:
+            conexao.enviar(b'%s' % i)
+
+        # Envia mensagem de sinalização que todas as partes acabaram
         conexao.enviar(b':server 366 %s %s :End of /NAMES list.\r\n' % (conexao.nick_atual, nome_canal))
 
     else:
