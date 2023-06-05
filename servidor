@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
-from grader.tcp import Servidor
+from tcp import Servidor
 import re
 
 # Armazena os nick_names dos usuários registrados e a conexão de cada um
@@ -214,17 +214,15 @@ def dados_recebidos(conexao, dados):
             set_action(conexao, conexao.dados_residuais)
             conexao.dados_residuais = '' # limpa o buffer de dados residuais
         
-    
 
 def conexao_aceita(conexao):
     print(conexao, 'nova conexão')
-    
-    # Cria atributos pra armzenar o nick do usário que se conectou
+    conexao.registrar_recebedor(dados_recebidos)
+
+    # Cria atributos pra armazenar o nick do usário que se conectou
     # e para auxiliar nos fragmentos de mensagens recebidas
     conexao.nick_atual = b'*'
     conexao.dados_residuais = ''
-
-    conexao.registrar_recebedor(dados_recebidos)
 
 
 servidor = Servidor(6667)
