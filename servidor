@@ -187,39 +187,18 @@ def dados_recebidos(conexao, dados):
     
     print(conexao, dados)
 
-    # se existe pelo menos um delimitador de fim de linha nos dados recebidos
-    if b'\r\n' in dados:
-        # e se existe um dado incompleto guardado
-        if conexao.dados_residuais != '':
-            dados = dados.split(b'\r\n', 1) # fatia os dados pela primeira aparição do delimitador
-            conexao.dados_residuais += dados[0] # completa o dado residual
+    conexao.dados_residuais = conexao.dados_residuais + dados
+    conexao.dados_residuais = conexao.dados_residuais.split(b'\r\n')
 
-            set_action(conexao, conexao.dados_residuais)
-            
-            # limpa o buffer de dados residuais e mantém o restante dos dados
-            conexao.dados_residuais = ''
-            dados = dados[1]
-
-        dados = dados.split(b'\r\n')
-
-        if len(dados) > 1:
-            # envia todos os dados completos recebidos
-            for i in range(len(dados) - 1):
-                set_action(conexao, dados[i])
+    for i in range(len(conexao.dados_residuais) - 1):
+        set_action(conexao, conexao.dados_residuais[i])
         
-        # se os dados recebidos termina com uma parte incompleta
-        if dados[-1] != '':
-            conexao.dados_residuais = dados[-1]
-
+   
+    if conexao.dados_residuais[-1] == b'': # todos os dados estão completos
+        conexao.dados_residuais = b''
     else:
-        # se o dado recebido não tiver nenhum delimitador de fim de linha, guarda como dado residual
-        conexao.dados_residuais += dados
+        conexao.dados_residuais = conexao.dados_residuais[-1]  # os dados recebidos terminam com uma parte incompleta
 
-        # se o dado residual completou uma linha completa, envia o dado
-        if conexao.dados_residuais.endswith(b'\r\n'):
-            set_action(conexao, conexao.dados_residuais)
-            conexao.dados_residuais = '' # limpa o buffer de dados residuais
-        
 
 def conexao_aceita(conexao):
     print(conexao, 'nova conexão')
@@ -228,7 +207,7 @@ def conexao_aceita(conexao):
     # Cria atributos pra armazenar o nick do usário que se conectou
     # e para auxiliar nos fragmentos de mensagens recebidas
     conexao.nick_atual = b'*'
-    conexao.dados_residuais = ''
+    conexao.dados_residuais = b''
 
 
 servidor = Servidor(6667)
