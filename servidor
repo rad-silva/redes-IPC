@@ -158,26 +158,26 @@ def PART_action(conexao, dados):
     
 
 def set_action(conexao, dados):
-    comando, dados = dados.split(b' ', 1)
+    # comando, dados = dados.split(b' ', 1)
 
-    if comando == b'PING':
-        PING_action(conexao, dados)
+    # if comando == b'PING':
+    #     PING_action(conexao, dados)
 
-    elif comando == b'NICK':
-        NICK_action(conexao, dados)
+    # elif comando == b'NICK':
+    #     NICK_action(conexao, dados)
 
-    elif comando == b'PRIVMSG':
-        if dados.startswith(b'#'):
-            PRIVMSG_group_action(conexao, dados)
-        else:
-            PRIVMSG_users_action(conexao, dados)
+    # elif comando == b'PRIVMSG':
+    #     if dados.startswith(b'#'):
+    #         PRIVMSG_group_action(conexao, dados)
+    #     else:
+    #         PRIVMSG_users_action(conexao, dados)
 
-    elif comando == b'JOIN':
-        JOIN_action(conexao, dados)
+    # elif comando == b'JOIN':
+    #     JOIN_action(conexao, dados)
 
-    elif comando == b'PART':
-        if dados.startswith(b'#'):
-            PART_action(conexao, dados)
+    # elif comando == b'PART':
+    #     if dados.startswith(b'#'):
+    #         PART_action(conexao, dados)
             
             
 
